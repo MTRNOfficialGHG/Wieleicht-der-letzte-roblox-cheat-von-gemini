@@ -131,8 +131,7 @@ local function UpdateESP()
                     -- Team Color Logic
                     local isTeam = (player.Team == LocalPlayer.Team)
                     local drawColor = (Config.ESP_TeamCheck and isTeam) and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
-                    local skelColor = Color3.fromRGB(255, 255, 255)
-                    if Config.ESP_TeamCheck and isTeam then skelColor = Color3.fromRGB(150, 255, 150) end
+                    local skelColor = drawColor -- HIER IST DER FIX: Skeleton übernimmt jetzt exakt die Box-Farbe
 
                     -- Bounding Box Berechnen
                     local minX, minY = math.huge, math.huge
@@ -142,7 +141,7 @@ local function UpdateESP()
                         if part:IsA("BasePart") then
                             local pos = Camera:WorldToViewportPoint(part.Position)
                             local size = Camera:WorldToViewportPoint(part.Position + Vector3.new(0, part.Size.Y/2, 0))
-                            local scale = math.abs(pos.Y - size.Y) * 2 -- Ungefähre Part-Größe auf dem Screen
+                            local scale = math.abs(pos.Y - size.Y) * 2
                             
                             if pos.X - scale < minX then minX = pos.X - scale end
                             if pos.X + scale > maxX then maxX = pos.X + scale end
@@ -160,7 +159,7 @@ local function UpdateESP()
                     esp.Box.Color = drawColor
                     esp.Box.Visible = true
                     
-                    -- HP Bar (Liegend drunter wie auf deinem Bild)
+                    -- HP Bar
                     local hpPercent = char.Humanoid.Health / char.Humanoid.MaxHealth
                     local yOffset = maxY + 4
                     
@@ -170,7 +169,7 @@ local function UpdateESP()
                     
                     esp.HPBar.From = Vector2.new(minX, yOffset)
                     esp.HPBar.To = Vector2.new(minX + (boxWidth * hpPercent), yOffset)
-                    esp.HPBar.Color = Color3.fromRGB(255 - (hpPercent * 255), hpPercent * 255, 0) -- Geht von Grün nach Rot
+                    esp.HPBar.Color = Color3.fromRGB(255 - (hpPercent * 255), hpPercent * 255, 0)
                     esp.HPBar.Visible = true
 
                     -- Skeleton Zeichnen
