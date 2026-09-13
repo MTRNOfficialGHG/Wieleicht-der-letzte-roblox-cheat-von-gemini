@@ -1,0 +1,342 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local UserInputService = game:GetService("UserInputService")
+local Camera = Workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
+
+-- Interne Konfiguration
+local Config = {
+    -- Aimbot
+    Aimbot = false,
+    AimMode = "Immer aktiv",
+    ShowFOV = false,
+    TeamCheck = false,
+    WallCheck = false,
+    FOVSize = 100,
+    Smoothness = 0.5,
+    
+    -- Movement
+    MovementModified = false,
+    WalkSpeed = 16,
+    JumpPower = 50,
+
+    -- ESP
+    ESP_Enabled = false,
+    ESP_TeamCheck = false
+}
+
+local IsHoldingAim = false
+
+-- Input-Erkennung (Rechtsklick & Controller L2)
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if input.UserInputType == Enum.UserInputType.MouseButton2 or input.KeyCode == Enum.KeyCode.ButtonL2 then
+        IsHoldingAim = true
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input, gameProcessed)
+    if input.UserInputType == Enum.UserInputType.MouseButton2 or input.KeyCode == Enum.KeyCode.ButtonL2 then
+        IsHoldingAim = false
+    end
+end)
+
+-- FOV Kreis
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Visible = false
+FOVCircle.Color = Color3.fromRGB(255, 255, 255)
+FOVCircle.Thickness = 1.5
+FOVCircle.Transparency = 1
+FOVCircle.Filled = false
+
+local function UpdateFOV()
+    FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    FOVCircle.Radius = Config.FOVSize
+    FOVCircle.Visible = Config.ShowFOV
+end
+
+-- ==========================================
+-- ESP LOGIK (Box, Skeleton, HP Bar)
+-- ==========================================
+local ESP_Cache = {}
+
+local R15_Links = {
+    {"Head", "UpperTorso"}, {"UpperTorso", "LowerTorso"},
+    {"UpperTorso", "LeftUpperArm"}, {"LeftUpperArm", "LeftLowerArm"}, {"LeftLowerArm", "LeftHand"},
+    {"UpperTorso", "RightUpperArm"}, {"RightUpperArm", "RightLowerArm"}, {"RightLowerArm", "RightHand"},
+    {"LowerTorso", "LeftUpperLeg"}, {"LeftUpperLeg", "LeftLowerLeg"}, {"LeftLowerLeg", "LeftFoot"},
+    {"LowerTorso", "RightUpperLeg"}, {"RightUpperLeg", "RightLowerLeg"}, {"RightLowerLeg", "RightFoot"}
+}
+
+local R6_Links = {
+    {"Head", "Torso"},
+    {"Torso", "Left Arm"}, {"Torso", "Right Arm"},
+    {"Torso", "Left Leg"}, {"Torso", "Right Leg"}
+}
+
+local function CreateESP(player)
+    local esp = {
+        Box = Drawing.new("Square"),
+        HPBarBg = Drawing.new("Line"),
+        HPBar = Drawing.new("Line"),
+        Skeleton = {}
+    }
+    
+    esp.Box.Thickness = 1
+    esp.Box.Filled = false
+    
+    esp.HPBarBg.Thickness = 2
+    esp.HPBarBg.Color = Color3.fromRGB(50, 50, 50)
+    
+    esp.HPBar.Thickness = 2
+    
+    -- Erstelle max 15 Linien für das Skeleton (reicht für R15)
+    for i = 1, 15 do
+        local line = Drawing.new("Line")
+        line.Thickness = 1.5
+        table.insert(esp.Skeleton, line)
+    end
+
+    ESP_Cache[player] = esp
+end
+
+local function RemoveESP(player)
+    if ESP_Cache[player] then
+        ESP_Cache[player].Box:Remove()
+        ESP_Cache[player].HPBarBg:Remove()
+        ESP_Cache[player].HPBar:Remove()
+        for _, line in pairs(ESP_Cache[player].Skeleton) do
+            line:Remove()
+        end
+        ESP_Cache[player] = nil
+    end
+end
+
+Players.PlayerRemoving:Connect(RemoveESP)
+
+local function UpdateESP()
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            if not ESP_Cache[player] then CreateESP(player) end
+            
+            local esp = ESP_Cache[player]
+            local char = player.Character
+            
+            if Config.ESP_Enabled and char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Humanoid") and char.Humanoid.Health > 0 then
+                
+                local rootPart = char.HumanoidRootPart
+                local rootPos, onScreen = Camera:WorldToViewportPoint(rootPart.Position)
+                
+                if onScreen then
+                    -- Team Color Logic
+                    local isTeam = (player.Team == LocalPlayer.Team)
+                    local drawColor = (Config.ESP_TeamCheck and isTeam) and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+                    local skelColor = Color3.fromRGB(255, 255, 255)
+                    if Config.ESP_TeamCheck and isTeam then skelColor = Color3.fromRGB(150, 255, 150) end
+
+                    -- Bounding Box Berechnen
+                    local minX, minY = math.huge, math.huge
+                    local maxX, maxY = -math.huge, -math.huge
+                    
+                    for _, part in pairs(char:GetChildren()) do
+                        if part:IsA("BasePart") then
+                            local pos = Camera:WorldToViewportPoint(part.Position)
+                            local size = Camera:WorldToViewportPoint(part.Position + Vector3.new(0, part.Size.Y/2, 0))
+                            local scale = math.abs(pos.Y - size.Y) * 2 -- Ungefähre Part-Größe auf dem Screen
+                            
+                            if pos.X - scale < minX then minX = pos.X - scale end
+                            if pos.X + scale > maxX then maxX = pos.X + scale end
+                            if pos.Y - scale < minY then minY = pos.Y - scale end
+                            if pos.Y + scale > maxY then maxY = pos.Y + scale end
+                        end
+                    end
+                    
+                    local boxWidth = maxX - minX
+                    local boxHeight = maxY - minY
+                    
+                    -- Box Zeichnen
+                    esp.Box.Size = Vector2.new(boxWidth, boxHeight)
+                    esp.Box.Position = Vector2.new(minX, minY)
+                    esp.Box.Color = drawColor
+                    esp.Box.Visible = true
+                    
+                    -- HP Bar (Liegend drunter wie auf deinem Bild)
+                    local hpPercent = char.Humanoid.Health / char.Humanoid.MaxHealth
+                    local yOffset = maxY + 4
+                    
+                    esp.HPBarBg.From = Vector2.new(minX, yOffset)
+                    esp.HPBarBg.To = Vector2.new(maxX, yOffset)
+                    esp.HPBarBg.Visible = true
+                    
+                    esp.HPBar.From = Vector2.new(minX, yOffset)
+                    esp.HPBar.To = Vector2.new(minX + (boxWidth * hpPercent), yOffset)
+                    esp.HPBar.Color = Color3.fromRGB(255 - (hpPercent * 255), hpPercent * 255, 0) -- Geht von Grün nach Rot
+                    esp.HPBar.Visible = true
+
+                    -- Skeleton Zeichnen
+                    local isR15 = char:FindFirstChild("UpperTorso") ~= nil
+                    local links = isR15 and R15_Links or R6_Links
+                    
+                    for i, line in pairs(esp.Skeleton) do
+                        if links[i] then
+                            local part1 = char:FindFirstChild(links[i][1])
+                            local part2 = char:FindFirstChild(links[i][2])
+                            
+                            if part1 and part2 then
+                                local p1, s1 = Camera:WorldToViewportPoint(part1.Position)
+                                local p2, s2 = Camera:WorldToViewportPoint(part2.Position)
+                                
+                                if s1 and s2 then
+                                    line.From = Vector2.new(p1.X, p1.Y)
+                                    line.To = Vector2.new(p2.X, p2.Y)
+                                    line.Color = skelColor
+                                    line.Visible = true
+                                else
+                                    line.Visible = false
+                                end
+                            else
+                                line.Visible = false
+                            end
+                        else
+                            line.Visible = false
+                        end
+                    end
+                else
+                    -- Offscreen verstecken
+                    esp.Box.Visible = false
+                    esp.HPBarBg.Visible = false
+                    esp.HPBar.Visible = false
+                    for _, line in pairs(esp.Skeleton) do line.Visible = false end
+                end
+            else
+                -- Tot oder ESP aus
+                esp.Box.Visible = false
+                esp.HPBarBg.Visible = false
+                esp.HPBar.Visible = false
+                for _, line in pairs(esp.Skeleton) do line.Visible = false end
+            end
+        end
+    end
+end
+
+-- ==========================================
+-- MAIN LOOP & AIMBOT
+-- ==========================================
+local function GetClosestTarget()
+    local nearest = nil
+    local minDistance = Config.FOVSize
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
+            
+            if Config.TeamCheck and player.Team == LocalPlayer.Team then continue end
+
+            local head = player.Character.Head
+            local screenPos, onScreen = Camera:WorldToViewportPoint(head.Position)
+
+            if onScreen then
+                local distance = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)).Magnitude
+
+                if distance < minDistance then
+                    if Config.WallCheck then
+                        local rayParams = RaycastParams.new()
+                        rayParams.FilterDescendantsInstances = {LocalPlayer.Character}
+                        rayParams.FilterType = Enum.RaycastFilterType.Blacklist
+                        local rayResult = Workspace:Raycast(Camera.CFrame.Position, (head.Position - Camera.CFrame.Position).Unit * 1000, rayParams)
+
+                        if rayResult and rayResult.Instance and not rayResult.Instance:IsDescendantOf(player.Character) then
+                            continue 
+                        end
+                    end
+                    minDistance = distance
+                    nearest = player
+                end
+            end
+        end
+    end
+    return nearest
+end
+
+RunService.RenderStepped:Connect(function()
+    UpdateFOV()
+    UpdateESP()
+
+    -- Aimbot Logik
+    if Config.Aimbot then
+        local canAim = (Config.AimMode == "Immer aktiv") or (Config.AimMode == "Halten (Rechtsklick / L2)" and IsHoldingAim)
+        if canAim then
+            local target = GetClosestTarget()
+            if target then
+                local targetHead = target.Character.Head
+                local goalCFrame = CFrame.new(Camera.CFrame.Position, targetHead.Position)
+                Camera.CFrame = Camera.CFrame:Lerp(goalCFrame, Config.Smoothness)
+            end
+        end
+    end
+
+    -- Movement Logik
+    if Config.MovementModified and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+        local hum = LocalPlayer.Character.Humanoid
+        hum.WalkSpeed = Config.WalkSpeed
+        hum.UseJumpPower = true
+        hum.JumpPower = Config.JumpPower
+    end
+end)
+
+-- ==========================================
+-- UI ERSTELLUNG (Rayfield)
+-- ==========================================
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Window = Rayfield:CreateWindow({
+   Name = "Universal Hub V2",
+   LoadingTitle = "Lade Features...",
+   LoadingSubtitle = "Made by MTRN x Gemini",
+   ConfigurationSaving = { Enabled = false },
+   KeySystem = false
+})
+
+-- TAB 1: AIMBOT
+local CombatTab = Window:CreateTab("Combat", 4483362458)
+CombatTab:CreateToggle({ Name = "Aimbot ON / OFF", CurrentValue = false, Flag = "AimToggle", Callback = function(Value) Config.Aimbot = Value end })
+CombatTab:CreateDropdown({ Name = "Aimbot Modus", Options = {"Immer aktiv", "Halten (Rechtsklick / L2)"}, CurrentOption = {"Immer aktiv"}, MultipleOptions = false, Flag = "AimModeDropdown", Callback = function(Option) Config.AimMode = Option[1] end })
+CombatTab:CreateToggle({ Name = "Show FOV", CurrentValue = false, Flag = "FOVToggle", Callback = function(Value) Config.ShowFOV = Value end })
+CombatTab:CreateToggle({ Name = "Wall Check", CurrentValue = false, Flag = "WallToggle", Callback = function(Value) Config.WallCheck = Value end })
+CombatTab:CreateToggle({ Name = "Team Check (Aimbot)", CurrentValue = false, Flag = "TeamToggle", Callback = function(Value) Config.TeamCheck = Value end })
+CombatTab:CreateSlider({ Name = "FOV Size", Range = {10, 600}, Increment = 1, Suffix = "px", CurrentValue = 100, Flag = "FOVSlider", Callback = function(Value) Config.FOVSize = Value end })
+CombatTab:CreateSlider({ Name = "Smoothness", Range = {1, 100}, Increment = 1, Suffix = "%", CurrentValue = 50, Flag = "SmoothSlider", Callback = function(Value) Config.Smoothness = Value / 100 end })
+
+-- TAB 2: VISUALS (ESP)
+local VisualsTab = Window:CreateTab("Visuals", 4483362458)
+VisualsTab:CreateToggle({
+   Name = "Master ESP (Box, Skeleton & HP)",
+   CurrentValue = false,
+   Flag = "ESPToggle",
+   Callback = function(Value) Config.ESP_Enabled = Value end,
+})
+
+VisualsTab:CreateToggle({
+   Name = "ESP Team Color (Teammates Grün)",
+   CurrentValue = false,
+   Flag = "ESPTeamToggle",
+   Callback = function(Value) Config.ESP_TeamCheck = Value end,
+})
+
+-- TAB 3: MOVEMENT
+local MovementTab = Window:CreateTab("Movement", 4483362458)
+MovementTab:CreateToggle({
+   Name = "Speed & Jump ON / OFF",
+   CurrentValue = false,
+   Flag = "MoveToggle",
+   Callback = function(Value) 
+       Config.MovementModified = Value 
+       if not Value and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+           local hum = LocalPlayer.Character.Humanoid
+           hum.WalkSpeed = 16
+           hum.UseJumpPower = true
+           hum.JumpPower = 50
+       end
+   end,
+})
+MovementTab:CreateSlider({ Name = "WalkSpeed", Range = {16, 200}, Increment = 1, Suffix = " Speed", CurrentValue = 16, Flag = "SpeedSlider", Callback = function(Value) Config.WalkSpeed = Value end })
+MovementTab:CreateSlider({ Name = "JumpPower", Range = {50, 300}, Increment = 1, Suffix = " Power", CurrentValue = 50, Flag = "JumpSlider", Callback = function(Value) Config.JumpPower = Value end })
