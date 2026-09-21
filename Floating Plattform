@@ -1,0 +1,360 @@
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
+
+local InfJumpEnabled = false
+local FloatEnabled = false
+local ClickTPEnabled = false
+local FloatY = 0
+local Platform = nil
+
+-- Standard Keybinds
+local UpKey = Enum.KeyCode.E
+local DownKey = Enum.KeyCode.Q
+local BindingUp = false
+local BindingDown = false
+
+-- Core GUI Setup
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "FunHubGui"
+ScreenGui.ResetOnSpawn = false
+
+if gethui then
+    ScreenGui.Parent = gethui()
+elseif syn and syn.protect_gui then
+    syn.protect_gui(ScreenGui)
+    ScreenGui.Parent = game:GetService("CoreGui")
+else
+    ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+end
+
+-- Main Window Frame
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 230, 0, 355)
+MainFrame.Position = UDim2.new(0.5, -115, 0.3, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 10)
+MainCorner.Parent = MainFrame
+
+-- Title
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, -40, 0, 35)
+Title.Position = UDim2.new(0, 12, 0, 0)
+Title.BackgroundTransparency = 1
+Title.Text = "Roblox Utility Hub"
+Title.TextColor3 = Color3.fromRGB(240, 240, 240)
+Title.TextSize = 15
+Title.Font = Enum.Font.SourceSansBold
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = MainFrame
+
+-- Minimize Button
+local MinimizeBtn = Instance.new("TextButton")
+MinimizeBtn.Size = UDim2.new(0, 26, 0, 26)
+MinimizeBtn.Position = UDim2.new(1, -32, 0, 4)
+MinimizeBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+MinimizeBtn.Text = "-"
+MinimizeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+MinimizeBtn.TextSize = 18
+MinimizeBtn.Font = Enum.Font.SourceSansBold
+MinimizeBtn.Parent = MainFrame
+
+local MinCorner = Instance.new("UICorner")
+MinCorner.CornerRadius = UDim.new(0, 6)
+MinCorner.Parent = MinimizeBtn
+
+-- Content Layout Box
+local Content = Instance.new("Frame")
+Content.Size = UDim2.new(1, -20, 1, -45)
+Content.Position = UDim2.new(0, 10, 0, 40)
+Content.BackgroundTransparency = 1
+Content.Parent = MainFrame
+
+local Layout = Instance.new("UIListLayout")
+Layout.SortOrder = Enum.SortOrder.LayoutOrder
+Layout.Padding = UDim.new(0, 8)
+Layout.Parent = Content
+
+-- Minimize Toggle Logic
+local IsMinimized = false
+MinimizeBtn.MouseButton1Click:Connect(function()
+    IsMinimized = not IsMinimized
+    Content.Visible = not IsMinimized
+    if IsMinimized then
+        MainFrame.Size = UDim2.new(0, 230, 0, 35)
+        MinimizeBtn.Text = "+"
+    else
+        MainFrame.Size = UDim2.new(0, 230, 0, 355)
+        MinimizeBtn.Text = "-"
+    end
+end)
+
+-- WalkSpeed Input Box
+local SpeedBox = Instance.new("TextBox")
+SpeedBox.Size = UDim2.new(1, 0, 0, 35)
+SpeedBox.BackgroundColor3 = Color3.fromRGB(38, 38, 48)
+SpeedBox.PlaceholderText = "WalkSpeed (z.B. 50)"
+SpeedBox.Text = ""
+SpeedBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+SpeedBox.PlaceholderColor3 = Color3.fromRGB(140, 140, 150)
+SpeedBox.TextSize = 13
+SpeedBox.Font = Enum.Font.SourceSans
+SpeedBox.Parent = Content
+
+local SpeedCorner = Instance.new("UICorner")
+SpeedCorner.CornerRadius = UDim.new(0, 6)
+SpeedCorner.Parent = SpeedBox
+
+SpeedBox.FocusLost:Connect(function()
+    local val = tonumber(SpeedBox.Text)
+    if val and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+        LocalPlayer.Character.Humanoid.WalkSpeed = val
+    end
+end)
+
+-- Infinite Jump Toggle
+local InfJumpBtn = Instance.new("TextButton")
+InfJumpBtn.Size = UDim2.new(1, 0, 0, 35)
+InfJumpBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+InfJumpBtn.Text = "Inf Jump: AUS"
+InfJumpBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+InfJumpBtn.TextSize = 14
+InfJumpBtn.Font = Enum.Font.SourceSansBold
+InfJumpBtn.Parent = Content
+
+local InfCorner = Instance.new("UICorner")
+InfCorner.CornerRadius = UDim.new(0, 6)
+InfCorner.Parent = InfJumpBtn
+
+InfJumpBtn.MouseButton1Click:Connect(function()
+    InfJumpEnabled = not InfJumpEnabled
+    if InfJumpEnabled then
+        InfJumpBtn.Text = "Inf Jump: AN"
+        InfJumpBtn.BackgroundColor3 = Color3.fromRGB(45, 160, 75)
+    else
+        InfJumpBtn.Text = "Inf Jump: AUS"
+        InfJumpBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+    end
+end)
+
+UserInputService.JumpRequest:Connect(function()
+    if InfJumpEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+        LocalPlayer.Character.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+    end
+end)
+
+-- Click TP Toggle
+local ClickTPBtn = Instance.new("TextButton")
+ClickTPBtn.Size = UDim2.new(1, 0, 0, 35)
+ClickTPBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+ClickTPBtn.Text = "Click TP: AUS"
+ClickTPBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ClickTPBtn.TextSize = 14
+ClickTPBtn.Font = Enum.Font.SourceSansBold
+ClickTPBtn.Parent = Content
+
+local TPCorner = Instance.new("UICorner")
+TPCorner.CornerRadius = UDim.new(0, 6)
+TPCorner.Parent = ClickTPBtn
+
+ClickTPBtn.MouseButton1Click:Connect(function()
+    ClickTPEnabled = not ClickTPEnabled
+    if ClickTPEnabled then
+        ClickTPBtn.Text = "Click TP: AN"
+        ClickTPBtn.BackgroundColor3 = Color3.fromRGB(45, 160, 75)
+    else
+        ClickTPBtn.Text = "Click TP: AUS"
+        ClickTPBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+    end
+end)
+
+Mouse.Button1Down:Connect(function()
+    if ClickTPEnabled and Mouse.Hit then
+        local char = LocalPlayer.Character
+        if char and char:FindFirstChild("HumanoidRootPart") then
+            char.HumanoidRootPart.CFrame = CFrame.new(Mouse.Hit.Position + Vector3.new(0, 3, 0))
+        end
+    end
+end)
+
+-- Float Platform Toggle
+local FloatBtn = Instance.new("TextButton")
+FloatBtn.Size = UDim2.new(1, 0, 0, 35)
+FloatBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+FloatBtn.Text = "Plattform: AUS"
+FloatBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+FloatBtn.TextSize = 14
+FloatBtn.Font = Enum.Font.SourceSansBold
+FloatBtn.Parent = Content
+
+local FloatCorner = Instance.new("UICorner")
+FloatCorner.CornerRadius = UDim.new(0, 6)
+FloatCorner.Parent = FloatBtn
+
+-- Platform Controls Frame
+local ControlFrame = Instance.new("Frame")
+ControlFrame.Size = UDim2.new(1, 0, 0, 35)
+ControlFrame.BackgroundTransparency = 1
+ControlFrame.Parent = Content
+
+local UpBtn = Instance.new("TextButton")
+UpBtn.Size = UDim2.new(0.48, 0, 1, 0)
+UpBtn.Position = UDim2.new(0, 0, 0, 0)
+UpBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
+UpBtn.Text = "▲ Hoch"
+UpBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+UpBtn.TextSize = 14
+UpBtn.Font = Enum.Font.SourceSansBold
+UpBtn.Parent = ControlFrame
+
+local UpCorner = Instance.new("UICorner")
+UpCorner.CornerRadius = UDim.new(0, 6)
+UpCorner.Parent = UpBtn
+
+local DownBtn = Instance.new("TextButton")
+DownBtn.Size = UDim2.new(0.48, 0, 1, 0)
+DownBtn.Position = UDim2.new(0.52, 0, 0, 0)
+DownBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
+DownBtn.Text = "▼ Runter"
+DownBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+DownBtn.TextSize = 14
+DownBtn.Font = Enum.Font.SourceSansBold
+DownBtn.Parent = ControlFrame
+
+local DownCorner = Instance.new("UICorner")
+DownCorner.CornerRadius = UDim.new(0, 6)
+DownCorner.Parent = DownBtn
+
+-- Keybind Frame
+local KeybindFrame = Instance.new("Frame")
+KeybindFrame.Size = UDim2.new(1, 0, 0, 25)
+KeybindFrame.BackgroundTransparency = 1
+KeybindFrame.Parent = Content
+
+local UpKeyBtn = Instance.new("TextButton")
+UpKeyBtn.Size = UDim2.new(0.48, 0, 1, 0)
+UpKeyBtn.Position = UDim2.new(0, 0, 0, 0)
+UpKeyBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
+UpKeyBtn.Text = "Taste: E"
+UpKeyBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+UpKeyBtn.TextSize = 13
+UpKeyBtn.Font = Enum.Font.SourceSans
+UpKeyBtn.Parent = KeybindFrame
+
+local UpKeyCorner = Instance.new("UICorner")
+UpKeyCorner.CornerRadius = UDim.new(0, 6)
+UpKeyCorner.Parent = UpKeyBtn
+
+local DownKeyBtn = Instance.new("TextButton")
+DownKeyBtn.Size = UDim2.new(0.48, 0, 1, 0)
+DownKeyBtn.Position = UDim2.new(0.52, 0, 0, 0)
+DownKeyBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
+DownKeyBtn.Text = "Taste: Q"
+DownKeyBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+DownKeyBtn.TextSize = 13
+DownKeyBtn.Font = Enum.Font.SourceSans
+DownKeyBtn.Parent = KeybindFrame
+
+local DownKeyCorner = Instance.new("UICorner")
+DownKeyCorner.CornerRadius = UDim.new(0, 6)
+DownKeyCorner.Parent = DownKeyBtn
+
+-- Platform Logic
+local function RemovePlatform()
+    if Platform then
+        Platform:Destroy()
+        Platform = nil
+    end
+end
+
+FloatBtn.MouseButton1Click:Connect(function()
+    FloatEnabled = not FloatEnabled
+    if FloatEnabled then
+        FloatBtn.Text = "Plattform: AN"
+        FloatBtn.BackgroundColor3 = Color3.fromRGB(45, 160, 75)
+        
+        local char = LocalPlayer.Character
+        if char and char:FindFirstChild("HumanoidRootPart") then
+            FloatY = char.HumanoidRootPart.Position.Y - 3.5
+            
+            Platform = Instance.new("Part")
+            Platform.Size = Vector3.new(9, 1, 9)
+            Platform.Anchored = true
+            Platform.CanCollide = true
+            Platform.Transparency = 1
+            Platform.Parent = workspace
+        end
+    else
+        FloatBtn.Text = "Plattform: AUS"
+        FloatBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+        RemovePlatform()
+    end
+end)
+
+UpBtn.MouseButton1Click:Connect(function()
+    if FloatEnabled then FloatY = FloatY + 2.5 end
+end)
+
+DownBtn.MouseButton1Click:Connect(function()
+    if FloatEnabled then FloatY = FloatY - 2.5 end
+end)
+
+-- Keybind Assignment Logic
+UpKeyBtn.MouseButton1Click:Connect(function()
+    BindingUp = true
+    BindingDown = false
+    UpKeyBtn.Text = "[...]"
+    DownKeyBtn.Text = "Taste: " .. DownKey.Name
+end)
+
+DownKeyBtn.MouseButton1Click:Connect(function()
+    BindingDown = true
+    BindingUp = false
+    DownKeyBtn.Text = "[...]"
+    UpKeyBtn.Text = "Taste: " .. UpKey.Name
+end)
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    -- Handle Key Rebinding
+    if input.UserInputType == Enum.UserInputType.Keyboard then
+        if BindingUp then
+            UpKey = input.KeyCode
+            UpKeyBtn.Text = "Taste: " .. UpKey.Name
+            BindingUp = false
+            return
+        elseif BindingDown then
+            DownKey = input.KeyCode
+            DownKeyBtn.Text = "Taste: " .. DownKey.Name
+            BindingDown = false
+            return
+        end
+    end
+
+    -- Handle Float Height Controls via Keys
+    if not gameProcessed and FloatEnabled then
+        if input.KeyCode == UpKey then
+            FloatY = FloatY + 2.5
+        elseif input.KeyCode == DownKey then
+            FloatY = FloatY - 2.5
+        end
+    end
+end)
+
+RunService.RenderStepped:Connect(function()
+    if FloatEnabled and Platform then
+        local char = LocalPlayer.Character
+        if char and char:FindFirstChild("HumanoidRootPart") then
+            local rootPos = char.HumanoidRootPart.Position
+            Platform.CFrame = CFrame.new(rootPos.X, FloatY, rootPos.Z)
+        end
+    end
+end)
